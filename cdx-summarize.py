@@ -26,11 +26,19 @@ def lvl2_from_surt(surt):
 	if p == -1:
 		return '';
 	p1 = surt.find(',', p + 1)
+	p2 = surt.find(')', p + 1)
 	if p1 == -1:
-		p1 = surt.find(')', p + 1)
-		if p1 == -1:
+		if p2 == -1:
 			return ''
-	return surt[p + 1:p1]+'.'+surt[0:p]
+		else:
+			return surt[p + 1:p2]+'.'+surt[0:p]
+	else:
+		if p2 == -1:
+			return surt[p + 1:p1]+'.'+surt[0:p]
+		elif p1 < p2:
+			return surt[p + 1:p1]+'.'+surt[0:p]
+		else:
+			return surt[p + 1:p2]+'.'+surt[0:p]
 
 def year_from_date(date, ismonthly):
 	if len(date) < 6:
@@ -47,6 +55,15 @@ def year_from_date(date, ismonthly):
 			if yi >= MIN_YEAR and yi <= MAX_YEAR:
 				return yi
 	return -1
+
+def scheme_from_url(url):
+	if len(url)<8:
+		return ''
+	if url[0:7] == 'http://':
+		return 'http'
+	elif url[0:8] == 'https://':
+		return 'https'
+	return ''
 
 # parse CDXJ file
 def parse_line_cdxj(line, ismonthly):
@@ -86,8 +103,7 @@ def summarize_line(lvl2, year, info):
 	if len(lvl2) < 1:
 		return
 	if "status" in info and info["status"][0:1] == "2":
-		parse = urllib.parse.urlparse(info["url"])
-		scheme = parse[0]
+		scheme = scheme_from_url(info['url'])
 		if not lvl2 in Hosts:
 			Hosts[lvl2] = {}
 		if not year in Hosts[lvl2]:

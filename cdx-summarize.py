@@ -1,6 +1,5 @@
 #!/usr/bin/python3
 from argparse import ArgumentParser
-
 import sys
 import gzip
 import json
@@ -22,58 +21,79 @@ Hosts = {}
 def print_to_stderr(*a): 
 	print(*a, file = sys.stderr)
 
+def lvl2_from_surt(surt):
+	p = surt.find(',')
+	if p == -1:
+		return '';
+	p1 = surt.find(',', p + 1)
+	if p1 == -1:
+		p1 = surt.find(')', p + 1)
+		if p1 == -1:
+			return ''
+	return surt[p + 1:p1]+'.'+surt[0:p]
+
+def year_from_date(date, ismonthly):
+	if len(date) < 6:
+		return -1
+	if ismonthly:
+		year = date[0:6]
+	else:
+		year = date[0:4]
+	if year.isdigit():
+		if ismonthly:
+			return int(year)
+		else:
+			yi = int(year)
+			if yi >= MIN_YEAR and yi <= MAX_YEAR:
+				return yi
+	return -1
+
 # parse CDXJ file
 def parse_line_cdxj(line, ismonthly):
 	tokens = line.split()
 	if len(tokens) < 3:
 		return
-	year = ""
-	if ismonthly:
-		year = tokens[1][0:6]
-	else:
-		year = tokens[1][0:4]
-		if int(year) < MIN_YEAR or int(year) > MAX_YEAR:
-			return
-	line = line.replace("\\'","--")
+	year = year_from_date(tokens[1], ismonthly)
+	if year == -1:
+		return
 	p = line.find(" {\"") + 1
 	p1 = line.rfind("\"}")
-	if p >= 0:
+	if p == -1:
+		return
+	try:
 		info = json.loads(line[p:p1+2])
-		summarize_line(year, info)
+		summarize_line(lvl2_from_surt(tokens[0]), year, info)
+	except Exception as inst:
+		print_to_stderr('cdxj: could not parse line', inst)
 
 # parse CDX7 file as returned by Internet Archive's CDX server by default
 def parse_line_cdx7(line, ismonthly):
 	tokens = line.split()
 	if len(tokens) < 7:
 		return
-	year = ""
-	if ismonthly:
-		year = tokens[1][0:6]
-	else:
-		year = tokens[1][0:4]
-	line = line.replace("\\'","--")
+	year = year_from_date(tokens[1], ismonthly)
+	if year == -1:
+		return
 	if tokens[6] == '-':
 		tokens[6] = '0'
 	info = {"url": tokens[2], "mime": tokens[3],"status":tokens[4],"hash":tokens[5],"length":tokens[6]}
-	summarize_line(year, info)
+	try:
+		summarize_line(lvl2_from_surt(tokens[0]), year, info)
+	except Exception as inst:
+		print_to_stderr('cdx: could not parse line', inst)
 
-def summarize_line(year, info):
-	parse = urllib.parse.urlparse(info["url"])
-	host = parse.hostname
-	if len(host) < 2:
+def summarize_line(lvl2, year, info):
+	if len(lvl2) < 1:
 		return
-	hostParts = host.split('.')
-	tld = hostParts[-1]
-	if len(hostParts) > 1:
-		lvl2 = hostParts[-2]+'.'+hostParts[-1]
-	else:
-		lvl2 = hostParts[-1]
-	scheme = parse[0]
-	if not lvl2 in Hosts:
-		Hosts[lvl2] = {}
-	if not year in Hosts[lvl2]:
-		Hosts[lvl2][year] = mime_counter.init_counter()
-	if "status" in info and info["status"][0:1] == "2" and "mime" in info:
+	if "status" in info and info["status"][0:1] == "2":
+		parse = urllib.parse.urlparse(info["url"])
+		scheme = parse[0]
+		if not lvl2 in Hosts:
+			Hosts[lvl2] = {}
+		if not year in Hosts[lvl2]:
+			Hosts[lvl2][year] = mime_counter.init_counter()
+		if not 'mime' in info:
+			info['mime']='unknown'
 		mime_counter.add_mime(Hosts[lvl2][year], info["mime"], 1, int(info["length"]))
 		mime_counter.add_scheme(Hosts[lvl2][year], scheme, 1, int(info["length"]))
 
@@ -122,7 +142,7 @@ def dowork(args):
 							except Exception as inst:
 								print_to_stderr("Unexpected error:", inst, line)
 					else:
-                                            print_to_stderr("Unsupported cdx format: ",line)
+                                            print_to_stderr("Unsupported cdx format: ", f, line)
 			except Exception as inst:
 				print_to_stderr("Error", inst, f)
 		else:
@@ -144,7 +164,7 @@ def dowork(args):
 					except Exception as inst:
 						print_to_stderr("Unexpected error:", inst, line)
 			else:
-				print_to_stderr("Unsupported cdx format: ",line)
+				print_to_stderr("Unsupported cdx format: ", f, line)
 	outputResults()
 
 

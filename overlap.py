@@ -99,7 +99,10 @@ def dowork(args):
         else:
             fd.sort(key=lambda k:k[COLUMN_KEY])
     if args.csv:
-        export_as_csv_with_years(args, res)
+        if args.noyear:
+            export_as_csv_simple(args, res)
+        else:
+            export_as_csv_with_years(args, res)
     else:
         jsonout = {}
         for k in res:
@@ -118,10 +121,48 @@ def print_csv_line(args, arr):
     s = '"'+args.outsep+'"'
     print('"'+s.join(arr)+'"')
 
+def print_header_combi(args, res_sorted, out = []):
+    for k in res_sorted:
+        parts = k.split('-')
+        name = filename_from_key(args, k)
+        if len(parts) > 1:
+            for e in parts:
+                out.append(args.file[int(e)] + ' from (' + name + ')')
+        else:
+            out.append(args.file[int(parts[0])])
+    print_csv_line(args, out)
+
+def export_as_csv_simple(args, res):
+    res_sorted = sorted(res)
+    print('Count of hosts:')
+    out = []
+    for k in res_sorted:
+        out.append(filename_from_key(args, k))
+    print_csv_line(args, out)
+    out = []
+    for k in res_sorted:
+        out.append(str(res[k][RES_COUNT]))
+    print_csv_line(args, out)
+    print('Count of URLs:')
+    print_header_combi(args, res_sorted, [])
+    out = []
+    for k in res_sorted:
+        parts = k.split('-')
+        for i in range(0, len(parts)):
+            out.append(str(res[k][RES_N + 2 * i]))
+    print_csv_line(args, out)
+    print('Size of compressed records:')
+    print_header_combi(args, res_sorted, [])
+    out = []
+    for k in res_sorted:
+        parts = k.split('-')
+        for i in range(0, len(parts)):
+            out.append(str(res[k][RES_SIZE + 2 * i]))
+    print_csv_line(args, out)    
+
 def export_as_csv_with_years(args, res):
     # find out which years exist
     years = {}
-
     for k in res:
         for y in res[k]:
             years[y] = True
@@ -141,6 +182,33 @@ def export_as_csv_with_years(args, res):
             else:
                 out.append('0')
         print_csv_line(args, out)
+    print('Count of URLs:')
+    print_header_combi(args, res_sorted, ['Year'])
+    out = []
+    for y in sorted(years):
+        out = [str(y)]
+        for k in res_sorted:
+            parts = k.split('-')
+            for i in range(0, len(parts)):
+                if y in res[k]:
+                    out.append(str(res[k][y][RES_N + 2 * i]))
+                else:
+                    out.append('0')
+        print_csv_line(args, out)
+    print('Size of compressed records:')
+    print_header_combi(args, res_sorted, ['Year'])
+    out = []
+    for y in sorted(years):
+        out = [str(y)]
+        for k in res_sorted:
+            parts = k.split('-')
+            for i in range(0, len(parts)):
+                if y in res[k]:
+                    out.append(str(res[k][y][RES_SIZE + 2 * i]))
+                else:
+                    out.append('0')
+        print_csv_line(args, out)
+
 
 parser = ArgumentParser(description='Find the overlap between several sorted files and optionally sum last two columns')
 parser.add_argument('-sep', default=' ', help='field separator (default is space)')

@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 from argparse import ArgumentParser
 import sys
+import json
 
 COLUMN_INDEX    = 0
 COLUMN_FILENAME = 1
@@ -97,13 +98,56 @@ def dowork(args):
             all_eof = True
         else:
             fd.sort(key=lambda k:k[COLUMN_KEY])
+    if args.csv:
+        export_as_csv_with_years(args, res)
+    else:
+        jsonout = {}
+        for k in res:
+            jsonout[filename_from_key(args, k)] = res[k]
+        print(json.dumps(jsonout))
+
+def filename_from_key(args, k):
+    filename = ''
+    for e in k.split('-'):
+        if len(filename):
+            filename += ' AND '
+        filename += args.file[int(e)]
+    return filename
+
+def print_csv_line(args, arr):
+    s = '"'+args.outsep+'"'
+    print('"'+s.join(arr)+'"')
+
+def export_as_csv_with_years(args, res):
+    # find out which years exist
+    years = {}
+
     for k in res:
-        print(k, res[k])
+        for y in res[k]:
+            years[y] = True
+    res_sorted = sorted(res)
+    print('Hosts:')
+    # print header
+    out = ['Year']
+    for k in res_sorted:
+        out.append(filename_from_key(args, k))
+    print_csv_line(args, out)
+    # print the years
+    for y in sorted(years):
+        out = [str(y)]
+        for k in res_sorted:
+            if y in res[k]:
+                out.append(str(res[k][y][RES_COUNT]))
+            else:
+                out.append('0')
+        print_csv_line(args, out)
 
 parser = ArgumentParser(description='Find the overlap between several sorted files and optionally sum last two columns')
 parser.add_argument('-sep', default=' ', help='field separator (default is space)')
+parser.add_argument('-outsep', default=',', help='output field separator (default is comma)')
 parser.add_argument('-noyear', action="store_true", help='input file does not have a year column')
 parser.add_argument('-nototal', action="store_true", help='do not sum the last two columns')
+parser.add_argument('-csv', action="store_true", help='Export only CSV file')
 parser.add_argument('file', nargs='*', help='file (can be several)')
 args = parser.parse_args()
 dowork(args)

@@ -21,8 +21,11 @@ def addFile(args, filename):
 				print(host,year)
 		else:
 			for year, values in sorted(entry.items()):
-				if 'n_total' in values and 's_total' in values and values['n_total'] > 0:
-					print(host,year,values['n_total'],values['s_total'])
+				if 'n_total' in values and values['n_total'] > 0:
+					if 's_total' in values:
+						print(host,year,values['n_total'],values['s_total'])
+					else:
+						print(host,year,values['n_total'],0)
 
 def dowork(args):
 	for f in args.file:

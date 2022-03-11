@@ -4,16 +4,18 @@ import sys
 import gzip
 import json
 import urllib
-from urllib.parse import urlparse
 import mime_counter
 
 # CDX(J) formats supported
 FORMAT_UNKNOWN = 0
 FORMAT_CDX7 = 1
 FORMAT_CDXJ = 2
+FORMAT_CDXNbamskrMVg = 3
 # Used to filter out invalid dates
 MIN_YEAR = 1991
-MAX_YEAR = 2021
+MAX_YEAR = 2022
+# Used to indicate End of String
+INT_MAX = 2147483647
 
 # Dictionary to hold the data per 2nd-level domain, per year
 Hosts = {}
@@ -21,6 +23,9 @@ Hosts = {}
 def print_to_stderr(*a): 
 	print(*a, file = sys.stderr)
 
+# the surt holds the inverted domain name as a sequence delimited by comma
+# so all we need to do is to go to the end of the domain or the second comma
+# and invert the parts
 def lvl2_from_surt(surt):
 	p = surt.find(',')
 	if p == -1:
@@ -39,6 +44,27 @@ def lvl2_from_surt(surt):
 			return surt[p + 1:p1]+'.'+surt[0:p]
 		else:
 			return surt[p + 1:p2]+'.'+surt[0:p]
+
+# the massaged URL has no protocol for http and https and strips the 'www'
+# so we look for the first non-host character and if there is no dot in the host
+# we reject it since it will not be a correct hostname
+def lvl2_from_massagedURL(url):
+	p1 = url.find('/')
+	p2 = url.find(':')
+	p3 = url.find('?')
+	if p1 == -1:
+		p1 = INT_MAX
+	if p2 == -1:
+		p2 = INT_MAX
+	if p3 == -1:
+		p3 = INT_MAX
+	p = min(p1, p2, p3, len(url))
+	hostparts = url[0:p].split('.')
+	if len(hostparts) < 2:
+		return ''
+	else:
+		return hostparts[len(hostparts)-2]+'.'+hostparts[len(hostparts)-1]
+	
 
 def year_from_date(date, ismonthly):
 	if len(date) < 6:
@@ -99,6 +125,21 @@ def parse_line_cdx7(line, ismonthly):
 	except Exception as inst:
 		print_to_stderr('cdx: could not parse line', inst)
 
+def parse_line_cdxNbamskrMVg(line, ismonthly):
+	tokens = line.split()
+	if len(tokens) < 10:
+		return
+	year = year_from_date(tokens[1], ismonthly)
+	if year == -1:
+		return
+	if tokens[6] == '-':
+		tokens[6] = '0'
+	info = {"url": tokens[2], "mime": tokens[3],"status":tokens[4],"hash":tokens[5],"length":0}
+	try:
+		summarize_line(lvl2_from_massagedURL(tokens[0]), year, info)
+	except Exception as inst:
+		print_to_stderr('cdx: could not parse line', inst)
+
 def summarize_line(lvl2, year, info):
 	if len(lvl2) < 1:
 		return
@@ -113,28 +154,54 @@ def summarize_line(lvl2, year, info):
 		mime_counter.add_mime(Hosts[lvl2][year], info["mime"], 1, int(info["length"]))
 		mime_counter.add_scheme(Hosts[lvl2][year], scheme, 1, int(info["length"]))
 
-def outputResults():
+def outputResults(args):
 	dict_items = Hosts.items()
 	sorted_items = sorted(dict_items)
 	for lvl2, value in sorted_items:
 		out = {}
 		for year in value:
-			out[year] = mime_counter.as_dict(value[year])
+			if args.compact:
+				tmp = mime_counter.as_dict(value[year])
+				out[year] = {}
+				for k in tmp:
+					if tmp[k] > 0:
+						out[year][k] = tmp[k]
+			else:
+				out[year] = mime_counter.as_dict(value[year])
 		print(lvl2, json.dumps(out))
 
 def determine_cdx_type(line):
 	tokens = line.split()
 	if len(tokens) < 3:
 		return FORMAT_UNKNOWN
+	if len(tokens)==11:
+		if tokens[0]=='CDX':
+			if line.rstrip()==' CDX N b a m s k r M V g':
+				return FORMAT_CDXNbamskrMVg
+			else:
+				return FORMAT_UNKNOWN
+
 	# all supported formats have the date as a 14 digit string in the second place
 	if (len(tokens[1]) != 14):
 		return FORMAT_UNKNOWN
 	# check if the line ends with a "} indicative of JSON
 	if line.rstrip()[-2:] == '"}':
 		return FORMAT_CDXJ
-	if len(tokens) < 7:
+	if len(tokens)==7:
+		return FORMAT_CDX7
+	elif len(tokens)==10:
+		return FORMAT_CDXNbamskrMVg
+	return FORMAT_UNKNOWN
+
+def cdx_type_from_args(args):
+	if args.format=='cdxj':
+		return FORMAT_CDXJ
+	elif args.format=='cdx7':
+		return FORMAT_CDX7
+	elif args.format=='cdx10':
+		return FORMAT_CDXNbamskrMVg
+	else:
 		return FORMAT_UNKNOWN
-	return FORMAT_CDX7
 
 def dowork(args):
 	for f in args.file:
@@ -142,7 +209,9 @@ def dowork(args):
 			try:
 				with gzip.open(f, mode='rt') as z:
 					line = z.readline()
-					ftype = determine_cdx_type(line)
+					ftype = cdx_type_from_args(args)
+					if ftype == FORMAT_UNKNOWN:
+						ftype = determine_cdx_type(line)
 					if ftype == FORMAT_CDXJ:
 						parse_line_cdxj(line.rstrip(), args.monthly)
 						for line in z:
@@ -157,6 +226,13 @@ def dowork(args):
 								parse_line_cdx7(line.rstrip(), args.monthly)
 							except Exception as inst:
 								print_to_stderr("Unexpected error:", inst, line)
+					elif ftype == FORMAT_CDXNbamskrMVg:
+						parse_line_cdxNbamskrMVg(line.rstrip(), args.monthly)
+						for line in z:
+							try:
+								parse_line_cdxNbamskrMVg(line.rstrip(), args.monthly)
+							except Exception as inst:
+								print_to_stderr("Unexpected error:", inst, line)					
 					else:
                                             print_to_stderr("Unsupported cdx format: ", f, line)
 			except Exception as inst:
@@ -164,7 +240,9 @@ def dowork(args):
 		else:
 			fil = open(f, 'r')
 			line = fil.readline()
-			ftype = determine_cdx_type(line)
+			ftype = cdx_type_from_args(args)
+			if ftype == FORMAT_UNKNOWN:
+				ftype = determine_cdx_type(line)
 			if ftype == FORMAT_CDXJ:
 				parse_line_cdxj(line.rstrip(), args.monthly)
 				for line in fil:
@@ -179,15 +257,24 @@ def dowork(args):
 						parse_line_cdx7(line.rstrip(), args.monthly)
 					except Exception as inst:
 						print_to_stderr("Unexpected error:", inst, line)
+			elif ftype == FORMAT_CDXNbamskrMVg:
+				parse_line_cdxNbamskrMVg(line.rstrip(), args.monthly)
+				for line in fil:
+					try:
+						parse_line_cdxNbamskrMVg(line.rstrip(), args.monthly)
+					except Exception as inst:
+						print_to_stderr("Unexpected error:", inst, line)
 			else:
 				print_to_stderr("Unsupported cdx format: ", f, line)
-	outputResults()
+	outputResults(args)
 
 
 parser = ArgumentParser(description='Summarize CDX file(s) to JSONL, automatically uses gzip filter if file ends with .gz')
 parser.add_argument('--gz', action="store_true", help='force use of gzip filter')
 parser.add_argument('--nogz', action="store_true", help='force not using gzip filter')
 parser.add_argument('--monthly', action="store_true", help='break up statistics into monthly buckets instead of yearly')
+parser.add_argument('--compact', action="store_true", help='do not output fields that are 0')
+parser.add_argument('--format',choices=['cdxj','cdx7','cdx10'], help='force use of cdx format')
 parser.add_argument('file', nargs='*', help='cdx file (can be several)')
 
 args = parser.parse_args()

@@ -10,7 +10,7 @@ import mime_counter
 FORMAT_UNKNOWN = 0
 FORMAT_CDX7 = 1
 FORMAT_CDXJ = 2
-FORMAT_CDXNbamskrMVg = 3
+FORMAT_CDXNbams = 3
 # Used to filter out invalid dates
 MIN_YEAR = 1991
 MAX_YEAR = 2022
@@ -125,16 +125,14 @@ def parse_line_cdx7(line, ismonthly):
 	except Exception as inst:
 		print_to_stderr('cdx: could not parse line', inst)
 
-def parse_line_cdxNbamskrMVg(line, ismonthly):
+def parse_line_cdxNbams(line, ismonthly):
 	tokens = line.split()
-	if len(tokens) < 10:
+	if len(tokens) < 5:
 		return
 	year = year_from_date(tokens[1], ismonthly)
 	if year == -1:
 		return
-	if tokens[6] == '-':
-		tokens[6] = '0'
-	info = {"url": tokens[2], "mime": tokens[3],"status":tokens[4],"hash":tokens[5],"length":0}
+	info = {"url": tokens[2], "mime": tokens[3],"status":tokens[4],"length":0}
 	try:
 		summarize_line(lvl2_from_massagedURL(tokens[0]), year, info)
 	except Exception as inst:
@@ -174,10 +172,10 @@ def determine_cdx_type(line):
 	tokens = line.split()
 	if len(tokens) < 3:
 		return FORMAT_UNKNOWN
-	if len(tokens)==11:
+	if len(tokens)>=6:
 		if tokens[0]=='CDX':
-			if line.rstrip()==' CDX N b a m s k r M V g':
-				return FORMAT_CDXNbamskrMVg
+			if line[0:14] == ' CDX N b a m s':
+				return FORMAT_CDXNbams
 			else:
 				return FORMAT_UNKNOWN
 
@@ -190,7 +188,7 @@ def determine_cdx_type(line):
 	if len(tokens)==7:
 		return FORMAT_CDX7
 	elif len(tokens)==10:
-		return FORMAT_CDXNbamskrMVg
+		return FORMAT_CDXNbams
 	return FORMAT_UNKNOWN
 
 def cdx_type_from_args(args):
@@ -198,8 +196,8 @@ def cdx_type_from_args(args):
 		return FORMAT_CDXJ
 	elif args.format=='cdx7':
 		return FORMAT_CDX7
-	elif args.format=='cdx10':
-		return FORMAT_CDXNbamskrMVg
+	elif args.format=='cdxNbams':
+		return FORMAT_CDXNbams
 	else:
 		return FORMAT_UNKNOWN
 
@@ -226,11 +224,11 @@ def dowork(args):
 								parse_line_cdx7(line.rstrip(), args.monthly)
 							except Exception as inst:
 								print_to_stderr("Unexpected error:", inst, line)
-					elif ftype == FORMAT_CDXNbamskrMVg:
-						parse_line_cdxNbamskrMVg(line.rstrip(), args.monthly)
+					elif ftype == FORMAT_CDXNbams:
+						parse_line_cdxNbams(line.rstrip(), args.monthly)
 						for line in z:
 							try:
-								parse_line_cdxNbamskrMVg(line.rstrip(), args.monthly)
+								parse_line_cdxNbams(line.rstrip(), args.monthly)
 							except Exception as inst:
 								print_to_stderr("Unexpected error:", inst, line)					
 					else:
@@ -257,11 +255,11 @@ def dowork(args):
 						parse_line_cdx7(line.rstrip(), args.monthly)
 					except Exception as inst:
 						print_to_stderr("Unexpected error:", inst, line)
-			elif ftype == FORMAT_CDXNbamskrMVg:
-				parse_line_cdxNbamskrMVg(line.rstrip(), args.monthly)
+			elif ftype == FORMAT_CDXNbams:
+				parse_line_cdxNbams(line.rstrip(), args.monthly)
 				for line in fil:
 					try:
-						parse_line_cdxNbamskrMVg(line.rstrip(), args.monthly)
+						parse_line_cdxNbams(line.rstrip(), args.monthly)
 					except Exception as inst:
 						print_to_stderr("Unexpected error:", inst, line)
 			else:
@@ -274,7 +272,7 @@ parser.add_argument('--gz', action="store_true", help='force use of gzip filter'
 parser.add_argument('--nogz', action="store_true", help='force not using gzip filter')
 parser.add_argument('--monthly', action="store_true", help='break up statistics into monthly buckets instead of yearly')
 parser.add_argument('--compact', action="store_true", help='do not output fields that are 0')
-parser.add_argument('--format',choices=['cdxj','cdx7','cdx10'], help='force use of cdx format')
+parser.add_argument('--format',choices=['cdxj','cdx7','cdxNbams'], help='force use of cdx format (cdxNbams = N b a m s)')
 parser.add_argument('file', nargs='*', help='cdx file (can be several)')
 
 args = parser.parse_args()

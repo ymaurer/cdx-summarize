@@ -9,7 +9,7 @@ The `host_year_total.py` can already answer some questions about the amount of d
 
 Use to create a summary for one or more CDX files per year with data about videos, images, html, pdf and http vs https sites. 
 ```
-usage: cdx-summarize.py [-h] [--gz] [--nogz] [--monthly] [--compact] [--format {cdxj,cdx7,cdxNbams}] [file [file ...]]
+usage: cdx-summarize.py [-h] [--gz] [--nogz] [--monthly] [--compact] [--format {cdxj,cdx7,cdxNbams}] [--encoding ENCODING] [file [file ...]]
 
 Summarize CDX file(s) to JSONL, automatically uses gzip filter if file ends with .gz
 
@@ -24,6 +24,7 @@ optional arguments:
   --compact             do not output fields that are 0
   --format {cdxj,cdx7,cdxNbams}
                         force use of cdx format (cdxNbams = N b a m s)
+  --encoding ENCODING   encoding, e.g. iso-8859-1 (default is your locale's defaut encoding, probably utf-8 on Linux). All CDX files have to have the same encoding
 ```
 
 # combine-summary

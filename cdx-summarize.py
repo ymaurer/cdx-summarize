@@ -205,7 +205,7 @@ def dowork(args):
 	for f in args.file:
 		if (args.gz or (len(f) > 3 and f[-3:] == '.gz')) and (not args.nogz):
 			try:
-				with gzip.open(f, mode='rt') as z:
+				with gzip.open(f, mode='rt', encoding=args.encoding) as z:
 					line = z.readline()
 					ftype = cdx_type_from_args(args)
 					if ftype == FORMAT_UNKNOWN:
@@ -236,7 +236,7 @@ def dowork(args):
 			except Exception as inst:
 				print_to_stderr("Error", inst, f)
 		else:
-			fil = open(f, 'r')
+			fil = open(f, 'r', encoding=args.encoding)
 			line = fil.readline()
 			ftype = cdx_type_from_args(args)
 			if ftype == FORMAT_UNKNOWN:
@@ -273,6 +273,7 @@ parser.add_argument('--nogz', action="store_true", help='force not using gzip fi
 parser.add_argument('--monthly', action="store_true", help='break up statistics into monthly buckets instead of yearly')
 parser.add_argument('--compact', action="store_true", help='do not output fields that are 0')
 parser.add_argument('--format',choices=['cdxj','cdx7','cdxNbams'], help='force use of cdx format (cdxNbams = N b a m s)')
+parser.add_argument('--encoding', action="store", default='utf-8', help='encoding, e.g. iso-8859-1 (default is your locale\'s defaut encoding, probably utf-8 on Linux). All CDX files have to have the same encoding')
 parser.add_argument('file', nargs='*', help='cdx file (can be several)')
 
 args = parser.parse_args()

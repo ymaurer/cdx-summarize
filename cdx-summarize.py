@@ -29,7 +29,7 @@ def print_to_stderr(*a):
 def lvl2_from_surt(surt):
 	p = surt.find(',')
 	if p == -1:
-		return '';
+		return ''
 	p1 = surt.find(',', p + 1)
 	p2 = surt.find(')', p + 1)
 	if p1 == -1:
@@ -201,6 +201,30 @@ def cdx_type_from_args(args):
 	else:
 		return FORMAT_UNKNOWN
 
+def init_file(fname, args):
+	res = {}
+	if (args.gz or (len(fname) > 3 and fname[-3:] == '.gz')) and (not args.nogz):
+		try:
+			res['f'] = gzip.open(fname, mode='rt', encoding=args.encoding)
+		except Exception as inst:
+			print_to_stderr("Error", inst, fname)
+	else:
+		res['f'] = open(fname, 'r', encoding=args.encoding)
+	ftype = cdx_type_from_args(args)
+	res['line'] = res['f'].readline()
+	if ftype == FORMAT_UNKNOWN:
+		ftype = determine_cdx_type(res['line'])
+	if ftype == FORMAT_CDXJ:
+		res['func'] = parse_line_cdxj
+	elif ftype == FORMAT_CDX7:
+		res['func'] = parse_line_cdx7
+	elif ftype == FORMAT_CDXNbams:
+		res['func'] = parse_line_cdxNbams
+	return res
+
+def process_line(fp, args):
+	fp['func'](fp['line'].rstrip(), args.monthly)
+
 def dowork(args):
 	for f in args.file:
 		if (args.gz or (len(f) > 3 and f[-3:] == '.gz')) and (not args.nogz):
@@ -232,7 +256,7 @@ def dowork(args):
 							except Exception as inst:
 								print_to_stderr("Unexpected error:", inst, line)					
 					else:
-                                            print_to_stderr("Unsupported cdx format: ", f, line)
+						print_to_stderr("Unsupported cdx format: ", f, line)
 			except Exception as inst:
 				print_to_stderr("Error", inst, f)
 		else:
@@ -277,4 +301,10 @@ parser.add_argument('--encoding', action="store", default='utf-8', help='encodin
 parser.add_argument('file', nargs='*', help='cdx file (can be several)')
 
 args = parser.parse_args()
-dowork(args)
+#dowork(args)
+for f in args.file:
+	res = init_file(f, args)
+	print(res)
+	process_line(res, args)
+
+outputResults(args)

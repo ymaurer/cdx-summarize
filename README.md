@@ -193,7 +193,7 @@ The categories are specified in the module `mime_counter.py` as follows:
 | text/html<br/>application/xhtml+xml<br/>text/plain | HTML | These are counted as "web-pages" by [Internet Archive](https://blog.archive.org/2016/10/23/defining-web-pages-web-sites-and-web-captures/) |
 | text/css | CSS | interesting for changing usage in formatting pages |
 | image/* | IMAGE | all image types are grouped together |
-| application/pdf | PDF | Interesting independetly, although IA groups PDFs in "web-page" too |
+| application/pdf | PDF | Interesting independently, although IA groups PDFs in "web-page" too |
 | video/* | VIDEO | all videos |
 | audio/* | AUDIO | all audio types |
 | application/javascript<br/>text/javascript<br/>application/x-javascript | JS | these 3 MIME types are common for javascript |

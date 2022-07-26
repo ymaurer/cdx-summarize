@@ -26,29 +26,31 @@ def print_to_stderr(*a):
 # the surt holds the inverted domain name as a sequence delimited by comma
 # so all we need to do is to go to the end of the domain or the second comma
 # and invert the parts
-def lvl2_from_surt(surt):
+def host_from_surt(surt, only2 = False):
 	p = surt.find(',')
 	if p == -1:
 		return ''
-	p1 = surt.find(',', p + 1)
 	p2 = surt.find(')', p + 1)
-	if p1 == -1:
-		if p2 == -1:
-			return ''
+	if p2 == -1:
+		return ''
+	parts = surt[0:p2].split(',')
+	if only2:
+		if len(parts) > 1:
+			return parts[-1] + '.' + parts[-2]
 		else:
-			return surt[p + 1:p2]+'.'+surt[0:p]
+			return parts[0]
 	else:
-		if p2 == -1:
-			return surt[p + 1:p1]+'.'+surt[0:p]
-		elif p1 < p2:
-			return surt[p + 1:p1]+'.'+surt[0:p]
-		else:
-			return surt[p + 1:p2]+'.'+surt[0:p]
+		parts.reverse()
+		return '.'.join(parts)
+
+
+def lvl2_from_surt(surt):
+	return host_from_surt(surt, False)
 
 # the massaged URL has no protocol for http and https and strips the 'www'
 # so we look for the first non-host character and if there is no dot in the host
 # we reject it since it will not be a correct hostname
-def lvl2_from_massagedURL(url):
+def host_from_massagedURL(url):
 	p1 = url.find('/')
 	p2 = url.find(':')
 	p3 = url.find('?')
@@ -59,13 +61,15 @@ def lvl2_from_massagedURL(url):
 	if p3 == -1:
 		p3 = INT_MAX
 	p = min(p1, p2, p3, len(url))
-	hostparts = url[0:p].split('.')
+	return url[0:p]
+
+def lvl2_from_massagedURL(url):
+	hostparts = host_from_massagedURL(url).split('.')
 	if len(hostparts) < 2:
 		return ''
 	else:
 		return hostparts[len(hostparts)-2]+'.'+hostparts[len(hostparts)-1]
 	
-
 def year_from_date(date, ismonthly):
 	if len(date) < 6:
 		return -1
@@ -301,10 +305,4 @@ parser.add_argument('--encoding', action="store", default='utf-8', help='encodin
 parser.add_argument('file', nargs='*', help='cdx file (can be several)')
 
 args = parser.parse_args()
-#dowork(args)
-for f in args.file:
-	res = init_file(f, args)
-	print(res)
-	process_line(res, args)
-
-outputResults(args)
+dowork(args)

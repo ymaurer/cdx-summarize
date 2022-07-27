@@ -36,7 +36,7 @@ def host_from_surt(surt, only2 = False):
 	parts = surt[0:p2].split(',')
 	if only2:
 		if len(parts) > 1:
-			return parts[-1] + '.' + parts[-2]
+			return parts[1] + '.' + parts[0]
 		else:
 			return parts[0]
 	else:
@@ -45,7 +45,7 @@ def host_from_surt(surt, only2 = False):
 
 
 def lvl2_from_surt(surt):
-	return host_from_surt(surt, False)
+	return host_from_surt(surt, True)
 
 # the massaged URL has no protocol for http and https and strips the 'www'
 # so we look for the first non-host character and if there is no dot in the host
@@ -96,7 +96,7 @@ def scheme_from_url(url):
 	return ''
 
 # parse CDXJ file
-def parse_line_cdxj(line, ismonthly):
+def parse_line_cdxj(line, ismonthly, fullhost=False):
 	tokens = line.split()
 	if len(tokens) < 3:
 		return
@@ -109,12 +109,15 @@ def parse_line_cdxj(line, ismonthly):
 		return
 	try:
 		info = json.loads(line[p:p1+2])
-		summarize_line(lvl2_from_surt(tokens[0]), year, info)
+		if fullhost:
+			summarize_line(host_from_surt(tokens[0]), year, info)
+		else:
+			summarize_line(lvl2_from_surt(tokens[0]), year, info)
 	except Exception as inst:
 		print_to_stderr('cdxj: could not parse line', inst)
 
 # parse CDX7 file as returned by Internet Archive's CDX server by default
-def parse_line_cdx7(line, ismonthly):
+def parse_line_cdx7(line, ismonthly, fullhost=False):
 	tokens = line.split()
 	if len(tokens) < 7:
 		return
@@ -125,11 +128,14 @@ def parse_line_cdx7(line, ismonthly):
 		tokens[6] = '0'
 	info = {"url": tokens[2], "mime": tokens[3],"status":tokens[4],"hash":tokens[5],"length":tokens[6]}
 	try:
-		summarize_line(lvl2_from_surt(tokens[0]), year, info)
+		if fullhost:
+			summarize_line(host_from_surt(tokens[0]), year, info)
+		else:
+			summarize_line(lvl2_from_surt(tokens[0]), year, info)
 	except Exception as inst:
 		print_to_stderr('cdx: could not parse line', inst)
 
-def parse_line_cdxNbams(line, ismonthly):
+def parse_line_cdxNbams(line, ismonthly, fullhost=False):
 	tokens = line.split()
 	if len(tokens) < 5:
 		return
@@ -138,7 +144,10 @@ def parse_line_cdxNbams(line, ismonthly):
 		return
 	info = {"url": tokens[2], "mime": tokens[3],"status":tokens[4],"length":0}
 	try:
-		summarize_line(lvl2_from_massagedURL(tokens[0]), year, info)
+		if fullhost:
+			summarize_line(host_from_massagedURL(tokens[0]), year, info)
+		else:
+			summarize_line(lvl2_from_massagedURL(tokens[0]), year, info)
 	except Exception as inst:
 		print_to_stderr('cdx: could not parse line', inst)
 
@@ -205,93 +214,49 @@ def cdx_type_from_args(args):
 	else:
 		return FORMAT_UNKNOWN
 
-def init_file(fname, args):
-	res = {}
-	if (args.gz or (len(fname) > 3 and fname[-3:] == '.gz')) and (not args.nogz):
-		try:
-			res['f'] = gzip.open(fname, mode='rt', encoding=args.encoding)
-		except Exception as inst:
-			print_to_stderr("Error", inst, fname)
-	else:
-		res['f'] = open(fname, 'r', encoding=args.encoding)
+def read_cdx_file(args, fil):
+	line = fil.readline()
 	ftype = cdx_type_from_args(args)
-	res['line'] = res['f'].readline()
 	if ftype == FORMAT_UNKNOWN:
-		ftype = determine_cdx_type(res['line'])
+		ftype = determine_cdx_type(line)
 	if ftype == FORMAT_CDXJ:
-		res['func'] = parse_line_cdxj
+		parse_line_cdxj(line.rstrip(), args.monthly, args.fullhost)
+		for line in fil:
+			try:
+				parse_line_cdxj(line.rstrip(), args.monthly, args.fullhost)
+			except Exception as inst:
+				print_to_stderr("Unexpected error:", inst, line)
 	elif ftype == FORMAT_CDX7:
-		res['func'] = parse_line_cdx7
+		parse_line_cdx7(line.rstrip(), args.monthly, args.fullhost)
+		for line in fil:
+			try:
+				parse_line_cdx7(line.rstrip(), args.monthly, args.fullhost)
+			except Exception as inst:
+				print_to_stderr("Unexpected error:", inst, line)
 	elif ftype == FORMAT_CDXNbams:
-		res['func'] = parse_line_cdxNbams
-	return res
-
-def process_line(fp, args):
-	fp['func'](fp['line'].rstrip(), args.monthly)
+		parse_line_cdxNbams(line.rstrip(), args.monthly, args.fullhost)
+		for line in fil:
+			try:
+				parse_line_cdxNbams(line.rstrip(), args.monthly, args.fullhost)
+			except Exception as inst:
+				print_to_stderr("Unexpected error:", inst, line)					
+	else:
+		print_to_stderr("Unsupported cdx format: ", f, line)
 
 def dowork(args):
 	for f in args.file:
 		if (args.gz or (len(f) > 3 and f[-3:] == '.gz')) and (not args.nogz):
 			try:
 				with gzip.open(f, mode='rt', encoding=args.encoding) as z:
-					line = z.readline()
-					ftype = cdx_type_from_args(args)
-					if ftype == FORMAT_UNKNOWN:
-						ftype = determine_cdx_type(line)
-					if ftype == FORMAT_CDXJ:
-						parse_line_cdxj(line.rstrip(), args.monthly)
-						for line in z:
-							try:
-								parse_line_cdxj(line.rstrip(), args.monthly)
-							except Exception as inst:
-								print_to_stderr("Unexpected error:", inst, line)
-					elif ftype == FORMAT_CDX7:
-						parse_line_cdx7(line.rstrip(), args.monthly)
-						for line in z:
-							try:
-								parse_line_cdx7(line.rstrip(), args.monthly)
-							except Exception as inst:
-								print_to_stderr("Unexpected error:", inst, line)
-					elif ftype == FORMAT_CDXNbams:
-						parse_line_cdxNbams(line.rstrip(), args.monthly)
-						for line in z:
-							try:
-								parse_line_cdxNbams(line.rstrip(), args.monthly)
-							except Exception as inst:
-								print_to_stderr("Unexpected error:", inst, line)					
-					else:
-						print_to_stderr("Unsupported cdx format: ", f, line)
+					read_cdx_file(args, z)
 			except Exception as inst:
 				print_to_stderr("Error", inst, f)
 		else:
-			fil = open(f, 'r', encoding=args.encoding)
-			line = fil.readline()
-			ftype = cdx_type_from_args(args)
-			if ftype == FORMAT_UNKNOWN:
-				ftype = determine_cdx_type(line)
-			if ftype == FORMAT_CDXJ:
-				parse_line_cdxj(line.rstrip(), args.monthly)
-				for line in fil:
-					try:
-						parse_line_cdxj(line.rstrip(), args.monthly)
-					except Exception as inst:
-						print_to_stderr("Unexpected error:", inst, line)
-			elif ftype == FORMAT_CDX7:
-				parse_line_cdx7(line.rstrip(), args.monthly)
-				for line in fil:
-					try:
-						parse_line_cdx7(line.rstrip(), args.monthly)
-					except Exception as inst:
-						print_to_stderr("Unexpected error:", inst, line)
-			elif ftype == FORMAT_CDXNbams:
-				parse_line_cdxNbams(line.rstrip(), args.monthly)
-				for line in fil:
-					try:
-						parse_line_cdxNbams(line.rstrip(), args.monthly)
-					except Exception as inst:
-						print_to_stderr("Unexpected error:", inst, line)
-			else:
-				print_to_stderr("Unsupported cdx format: ", f, line)
+			try:
+				with open(f, 'r', encoding=args.encoding) as fil:
+					read_cdx_file(args, fil)
+			except Exception as inst:
+				print_to_stderr("Error", inst, f)
 	outputResults(args)
 
 
@@ -300,6 +265,7 @@ parser.add_argument('--gz', action="store_true", help='force use of gzip filter'
 parser.add_argument('--nogz', action="store_true", help='force not using gzip filter')
 parser.add_argument('--monthly', action="store_true", help='break up statistics into monthly buckets instead of yearly')
 parser.add_argument('--compact', action="store_true", help='do not output fields that are 0')
+parser.add_argument('--fullhost', action="store_true", default=False, help='aggregate by full hostname instead of second level domain')
 parser.add_argument('--format',choices=['cdxj','cdx7','cdxNbams'], help='force use of cdx format (cdxNbams = N b a m s)')
 parser.add_argument('--encoding', action="store", default='utf-8', help='encoding, e.g. iso-8859-1 (default is your locale\'s defaut encoding, probably utf-8 on Linux). All CDX files have to have the same encoding')
 parser.add_argument('file', nargs='*', help='cdx file (can be several)')

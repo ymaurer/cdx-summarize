@@ -11,6 +11,7 @@ FORMAT_UNKNOWN = 0
 FORMAT_CDX7 = 1
 FORMAT_CDXJ = 2
 FORMAT_CDXNbams = 3
+FORMAT_CDXNbamskrMSVg = 4
 # Used to filter out invalid dates
 MIN_YEAR = 1991
 MAX_YEAR = 2022
@@ -129,7 +130,7 @@ def parse_line_cdx7(line, ismonthly, fullhost=False):
 		return ''
 	if tokens[6] == '-':
 		tokens[6] = '0'
-	info = {"url": tokens[2], "mime": tokens[3],"status":tokens[4],"hash":tokens[5],"length":tokens[6]}
+	info = {"url": tokens[2], "mime": tokens[3],"status":tokens[4],"length":tokens[6]}
 	try:
 		if fullhost:
 			aggregate_by = host_from_surt(tokens[0])
@@ -159,6 +160,25 @@ def parse_line_cdxNbams(line, ismonthly, fullhost=False):
 	except Exception as inst:
 		print_to_stderr('cdx: could not parse line', inst)
 	return ''
+
+def parse_line_cdxNbamskrMSVg(line, ismonthly, fullhost=False):
+	tokens = line.split()
+	if len(tokens) < 5:
+		return ''
+	year = year_from_date(tokens[1], ismonthly)
+	if year == -1:
+		return ''
+	info = {"url": tokens[2], "mime": tokens[3],"status":tokens[4],"length":tokens[8]}
+	try:
+		if fullhost:
+			aggregate_by = host_from_surt(tokens[0])
+		else:
+			aggregate_by = lvl2_from_surt(tokens[0])
+		summarize_line(aggregate_by, year, info)
+		return aggregate_by
+	except Exception as inst:
+		print_to_stderr('cdx: could not parse line', inst)
+	return ''	
 
 def summarize_line(lvl2, year, info):
 	if len(lvl2) < 1:
@@ -211,12 +231,13 @@ def determine_cdx_type(line):
 	if len(tokens) < 3:
 		return FORMAT_UNKNOWN
 	if len(tokens)>=6:
+		if line.strip() == 'CDX N b a m s k r M S V g':
+			return FORMAT_CDXNbamskrMSVg
 		if tokens[0]=='CDX':
 			if line[0:14] == ' CDX N b a m s':
 				return FORMAT_CDXNbams
 			else:
 				return FORMAT_UNKNOWN
-
 	# all supported formats have the date as a 14 digit string in the second place
 	if (len(tokens[1]) != 14):
 		return FORMAT_UNKNOWN
@@ -236,6 +257,8 @@ def cdx_type_from_args(args):
 		return FORMAT_CDX7
 	elif args.format=='cdxNbams':
 		return FORMAT_CDXNbams
+	elif args.format=='cdxNbamskrMSVg':
+		return FORMAT_CDXNbamskrMSVg
 	else:
 		return FORMAT_UNKNOWN
 
@@ -250,6 +273,8 @@ def read_cdx_file(args, fil, filename):
 		func = parse_line_cdx7
 	elif ftype == FORMAT_CDXNbams:
 		func = parse_line_cdxNbams
+	elif ftype == FORMAT_CDXNbamskrMSVg:
+		func = parse_line_cdxNbamskrMSVg
 	else:
 		print_to_stderr("Unsupported cdx format: ", filename, line)
 		return
@@ -289,7 +314,7 @@ parser.add_argument('--monthly', action="store_true", help='break up statistics 
 parser.add_argument('--compact', action="store_true", help='do not output fields that are 0')
 parser.add_argument('--fullhost', action="store_true", default=False, help='aggregate by full hostname instead of second level domain')
 parser.add_argument('--assume_unique', action="store_true", default=False, help='assume aggregation entry only appears in a continous run in the CDX file(s) (OK for single, sorted CDX with --fullhost)')
-parser.add_argument('--format',choices=['cdxj','cdx7','cdxNbams'], help='force use of cdx format (cdxNbams = N b a m s)')
+parser.add_argument('--format',choices=['cdxj','cdx7','cdxNbams', 'cdxNbamskrMSVg'], help='force use of cdx format (cdxNbams = N b a m s)')
 parser.add_argument('--encoding', action="store", default='utf-8', help='encoding, e.g. iso-8859-1 (default is your locale\'s defaut encoding, probably utf-8 on Linux). All CDX files have to have the same encoding')
 parser.add_argument('file', nargs='*', help='cdx file (can be several)')
 

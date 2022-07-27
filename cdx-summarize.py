@@ -99,57 +99,66 @@ def scheme_from_url(url):
 def parse_line_cdxj(line, ismonthly, fullhost=False):
 	tokens = line.split()
 	if len(tokens) < 3:
-		return
+		return ''
 	year = year_from_date(tokens[1], ismonthly)
 	if year == -1:
-		return
+		return ''
 	p = line.find(" {\"") + 1
 	p1 = line.rfind("\"}")
 	if p == -1:
-		return
+		return ''
 	try:
 		info = json.loads(line[p:p1+2])
 		if fullhost:
-			summarize_line(host_from_surt(tokens[0]), year, info)
+			aggregate_by = host_from_surt(tokens[0])
 		else:
-			summarize_line(lvl2_from_surt(tokens[0]), year, info)
+			aggregate_by = lvl2_from_surt(tokens[0])
+		summarize_line(aggregate_by, year, info)
+		return aggregate_by
 	except Exception as inst:
 		print_to_stderr('cdxj: could not parse line', inst)
+	return ''
 
 # parse CDX7 file as returned by Internet Archive's CDX server by default
 def parse_line_cdx7(line, ismonthly, fullhost=False):
 	tokens = line.split()
 	if len(tokens) < 7:
-		return
+		return ''
 	year = year_from_date(tokens[1], ismonthly)
 	if year == -1:
-		return
+		return ''
 	if tokens[6] == '-':
 		tokens[6] = '0'
 	info = {"url": tokens[2], "mime": tokens[3],"status":tokens[4],"hash":tokens[5],"length":tokens[6]}
 	try:
 		if fullhost:
-			summarize_line(host_from_surt(tokens[0]), year, info)
+			aggregate_by = host_from_surt(tokens[0])
 		else:
-			summarize_line(lvl2_from_surt(tokens[0]), year, info)
+			aggregate_by = lvl2_from_surt(tokens[0])
+		summarize_line(aggregate_by, year, info)
+		return aggregate_by
 	except Exception as inst:
 		print_to_stderr('cdx: could not parse line', inst)
+	return ''
 
 def parse_line_cdxNbams(line, ismonthly, fullhost=False):
 	tokens = line.split()
 	if len(tokens) < 5:
-		return
+		return ''
 	year = year_from_date(tokens[1], ismonthly)
 	if year == -1:
-		return
+		return ''
 	info = {"url": tokens[2], "mime": tokens[3],"status":tokens[4],"length":0}
 	try:
 		if fullhost:
-			summarize_line(host_from_massagedURL(tokens[0]), year, info)
+			aggregate_by = host_from_massagedURL(tokens[0])
 		else:
-			summarize_line(lvl2_from_massagedURL(tokens[0]), year, info)
+			aggregate_by = lvl2_from_massagedURL(tokens[0])
+		summarize_line(aggregate_by, year, info)
+		return aggregate_by
 	except Exception as inst:
 		print_to_stderr('cdx: could not parse line', inst)
+	return ''
 
 def summarize_line(lvl2, year, info):
 	if len(lvl2) < 1:
@@ -165,7 +174,7 @@ def summarize_line(lvl2, year, info):
 		mime_counter.add_mime(Hosts[lvl2][year], info["mime"], 1, int(info["length"]))
 		mime_counter.add_scheme(Hosts[lvl2][year], scheme, 1, int(info["length"]))
 
-def outputResults(args):
+def output_results(args):
 	dict_items = Hosts.items()
 	sorted_items = sorted(dict_items)
 	for lvl2, value in sorted_items:
@@ -180,6 +189,22 @@ def outputResults(args):
 			else:
 				out[year] = mime_counter.as_dict(value[year])
 		print(lvl2, json.dumps(out))
+
+# output only the values for the key agg_by (aggregate_by) and then delete that key from the dictionary
+def output_partial_results(args, agg_by):
+	if agg_by in Hosts:
+		out = {}
+		for year in Hosts[agg_by]:
+			if args.compact:
+				tmp = mime_counter.as_dict(Hosts[agg_by][year])
+				out[year] = {}
+				for k in tmp:
+					if tmp[k] > 0:
+						out[year][k] = tmp[k]
+			else:
+				out[year] = mime_counter.as_dict(Hosts[agg_by][year])
+		print(agg_by, json.dumps(out))
+		del Hosts[agg_by]
 
 def determine_cdx_type(line):
 	tokens = line.split()
@@ -214,50 +239,47 @@ def cdx_type_from_args(args):
 	else:
 		return FORMAT_UNKNOWN
 
-def read_cdx_file(args, fil):
+def read_cdx_file(args, fil, filename):
 	line = fil.readline()
 	ftype = cdx_type_from_args(args)
 	if ftype == FORMAT_UNKNOWN:
 		ftype = determine_cdx_type(line)
 	if ftype == FORMAT_CDXJ:
-		parse_line_cdxj(line.rstrip(), args.monthly, args.fullhost)
-		for line in fil:
-			try:
-				parse_line_cdxj(line.rstrip(), args.monthly, args.fullhost)
-			except Exception as inst:
-				print_to_stderr("Unexpected error:", inst, line)
+		func = parse_line_cdxj
 	elif ftype == FORMAT_CDX7:
-		parse_line_cdx7(line.rstrip(), args.monthly, args.fullhost)
-		for line in fil:
-			try:
-				parse_line_cdx7(line.rstrip(), args.monthly, args.fullhost)
-			except Exception as inst:
-				print_to_stderr("Unexpected error:", inst, line)
+		func = parse_line_cdx7
 	elif ftype == FORMAT_CDXNbams:
-		parse_line_cdxNbams(line.rstrip(), args.monthly, args.fullhost)
-		for line in fil:
-			try:
-				parse_line_cdxNbams(line.rstrip(), args.monthly, args.fullhost)
-			except Exception as inst:
-				print_to_stderr("Unexpected error:", inst, line)					
+		func = parse_line_cdxNbams
 	else:
-		print_to_stderr("Unsupported cdx format: ", f, line)
+		print_to_stderr("Unsupported cdx format: ", filename, line)
+		return
+	aggregate_by = func(line.rstrip(), args.monthly, args.fullhost)
+	for line in fil:
+		try:
+			agg = func(line.rstrip(), args.monthly, args.fullhost)
+			if args.assume_unique:
+				if agg != aggregate_by:
+					output_partial_results(args, aggregate_by)
+					aggregate_by = agg
+		except Exception as inst:
+			print_to_stderr("Unexpected error:", filename, inst, line)
+
 
 def dowork(args):
 	for f in args.file:
 		if (args.gz or (len(f) > 3 and f[-3:] == '.gz')) and (not args.nogz):
 			try:
 				with gzip.open(f, mode='rt', encoding=args.encoding) as z:
-					read_cdx_file(args, z)
+					read_cdx_file(args, z, f)
 			except Exception as inst:
 				print_to_stderr("Error", inst, f)
 		else:
 			try:
 				with open(f, 'r', encoding=args.encoding) as fil:
-					read_cdx_file(args, fil)
+					read_cdx_file(args, fil, f)
 			except Exception as inst:
 				print_to_stderr("Error", inst, f)
-	outputResults(args)
+	output_results(args)
 
 
 parser = ArgumentParser(description='Summarize CDX file(s) to JSONL, automatically uses gzip filter if file ends with .gz')
@@ -266,6 +288,7 @@ parser.add_argument('--nogz', action="store_true", help='force not using gzip fi
 parser.add_argument('--monthly', action="store_true", help='break up statistics into monthly buckets instead of yearly')
 parser.add_argument('--compact', action="store_true", help='do not output fields that are 0')
 parser.add_argument('--fullhost', action="store_true", default=False, help='aggregate by full hostname instead of second level domain')
+parser.add_argument('--assume_unique', action="store_true", default=False, help='assume aggregation entry only appears in a continous run in the CDX file(s) (OK for single, sorted CDX with --fullhost)')
 parser.add_argument('--format',choices=['cdxj','cdx7','cdxNbams'], help='force use of cdx format (cdxNbams = N b a m s)')
 parser.add_argument('--encoding', action="store", default='utf-8', help='encoding, e.g. iso-8859-1 (default is your locale\'s defaut encoding, probably utf-8 on Linux). All CDX files have to have the same encoding')
 parser.add_argument('file', nargs='*', help='cdx file (can be several)')

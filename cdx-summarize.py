@@ -5,6 +5,7 @@ import gzip
 import json
 import urllib
 import mime_counter
+import re
 
 # CDX(J) formats supported
 FORMAT_UNKNOWN = 0
@@ -20,6 +21,9 @@ INT_MAX = 2147483647
 
 # Dictionary to hold the data per 2nd-level domain, per year
 Hosts = {}
+
+# regular expression to signal the end of a host
+reURL = re.compile('(/|:|\?)')
 
 def print_to_stderr(*a): 
 	print(*a, file = sys.stderr)
@@ -49,27 +53,21 @@ def lvl2_from_surt(surt):
 	return host_from_surt(surt, True)
 
 # the massaged URL has no protocol for http and https and strips the 'www'
-# so we look for the first non-host character and if there is no dot in the host
-# we reject it since it will not be a correct hostname
+# so we look for the first non-host character 
 def host_from_massagedURL(url):
-	p1 = url.find('/')
-	p2 = url.find(':')
-	p3 = url.find('?')
-	if p1 == -1:
-		p1 = INT_MAX
-	if p2 == -1:
-		p2 = INT_MAX
-	if p3 == -1:
-		p3 = INT_MAX
-	p = min(p1, p2, p3, len(url))
-	return url[0:p]
+    p = reURL.search(url)
+    if p:
+        return url[0:p.span(0)[0]]
+    else:
+	    return url
 
 def lvl2_from_massagedURL(url):
-	hostparts = host_from_massagedURL(url).split('.')
-	if len(hostparts) < 2:
-		return ''
-	else:
-		return hostparts[len(hostparts)-2]+'.'+hostparts[len(hostparts)-1]
+	host = host_from_massagedURL(url)
+	p = host.rfind('.')
+	if p > -1:
+		p1 = host.rfind('.', 0, p -1)
+		return host[p1+1:]
+	return host
 	
 def year_from_date(date, ismonthly):
 	if len(date) < 6:

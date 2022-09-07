@@ -78,10 +78,15 @@ def output_host(args, hostname, years):
 # assume input files are sorted by aggregation key (host)
 # open all files at once and then advance in each file only if its key is the smallest
 def read_sorted(args):
+    agghost = False
     if args.aggregatehosts and args.aggregatehosts != 'none':
-        print_to_stderr('ERROR: incompatible arguments: --aggregatehosts', args.aggregatehosts,'and --assume_unique')
-        quit()
+        agghost = True
+        print_to_stderr('WARNING: incompatible arguments: --aggregatehosts', args.aggregatehosts,'and --assume_unique, this gives a non-sorted output')
     fil = []
+    if args.aggregatehosts == 'publicsuffixlist':
+        psl = PublicSuffixList()
+    else:
+        psl = None
     # open all files
     nEOF = 0
     for f in args.file:
@@ -94,7 +99,10 @@ def read_sorted(args):
         else:
             obj['eof'] = 'A'
             p = line.find(" {\"")
-            obj['host'] = line[0:p]
+            if agghost:
+                obj['host'] = simplifyhost(psl, args, line[0:p])
+            else:
+                obj['host'] = line[0:p]
             obj['years'] = json.loads(line[p+1:])
         fil.append(obj)
     fil.sort(key=lambda x:x['eof']+x['host'])
@@ -122,7 +130,10 @@ def read_sorted(args):
             nEOF+=1
         else:
             p = line.find(" {\"")
-            fil[0]['host'] = line[0:p]
+            if agghost:
+                fil[0]['host'] = simplifyhost(psl, args, line[0:p])
+            else:
+                fil[0]['host'] = line[0:p]
             fil[0]['years'] = json.loads(line[p+1:])
         fil.sort(key=lambda x:x['eof']+x['host'])
     if lasthost != '':

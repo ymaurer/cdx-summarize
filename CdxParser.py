@@ -116,13 +116,13 @@ class CdxParser:
             # line has embedded JSON
             if self.has_json:
                 d = json.loads(vars['data'])
-                if self.only200 and d['status'] and d['status'][0:1] != '2':
+                if self.only200 and 'status' in d and d['status'][0:1] != '2':
                     return {}
                 retsize = 0
                 if 'length' in d and d['length'].isnumeric():
                     retsize = int(d['length'])
                 retscheme = ''
-                if len(d['url']) >= 8:
+                if 'url' in d and len(d['url']) >= 8:
                     if d['url'][0:7] == 'http://':
                         retscheme = 'http'
                     elif d['url'][0:8] == 'https://':

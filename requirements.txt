@@ -1,3 +1,2 @@
-elasticsearch
 urllib3
 publicsuffixlist

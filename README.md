@@ -29,6 +29,25 @@ optional arguments:
   --encoding ENCODING   encoding, e.g. iso-8859-1 (default is your locale's defaut encoding, probably utf-8 on Linux). All CDX files have to have the same encoding
 ```
 
+# cdx-summarize-outbackcdx
+
+This program uses [https://github.com/nla/outbackcdx](https://github.com/nla/outbackcdx) as a data source to generate the summary file. It's particularly useful for archives who have an existing index used in a pywb instance. It assumes that the OutbackCDX server returns data in the cdxNbamskrMSVg format.
+```
+usage: cdx-summarize-outbackcdx.py [-h] [--monthly] [--compact] [--fullhost] [--assume_unique] url
+
+Summarize OutbackCDX index with all collections to JSONL
+
+positional arguments:
+  url              url of OutbackCDX server
+
+optional arguments:
+  -h, --help       show this help message and exit
+  --monthly        break up statistics into monthly buckets instead of yearly
+  --compact        do not output fields that are 0
+  --fullhost       aggregate by full hostname instead of second level domain
+  --assume_unique  assume aggregation entry only appears in a continous run in the CDX file(s) (OK for single, sorted CDX with --fullhost)
+```
+
 # combine-summary
 This program combines several of these summaries into a single one where each 2nd level domain only appears once. It can also run on a single file where then any duplicate entries for a single 2nd level domain are added together.
 ```

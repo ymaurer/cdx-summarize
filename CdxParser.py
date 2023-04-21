@@ -100,6 +100,9 @@ class CdxParser:
             if self.only200 and 'status' in vars and vars['status'][0:1] != '2':
                 return {}
             ret = {}
+            # some CDX files might have metadata records, do not count those
+            if 'mime' in vars and vars['mime']=='application/warc-fields':
+                return {}
             # the date can be just YYYY or YYYYMM
             if self.monthly:
                 retdate = int(vars['year'] + vars['month'])
@@ -117,6 +120,9 @@ class CdxParser:
             if self.has_json:
                 d = json.loads(vars['data'])
                 if self.only200 and 'status' in d and d['status'][0:1] != '2':
+                    return {}
+                # some CDXJ files have metadata records, do not count those
+                if 'mime' in d and d['mime']=='application/warc-fields':
                     return {}
                 retsize = 0
                 if 'length' in d and d['length'].isnumeric():
